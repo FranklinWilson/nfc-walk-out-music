@@ -4,6 +4,7 @@ using pygame's mixer.
 import logging
 import subprocess
 import threading
+from pathlib import Path
 
 import pygame
 
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 _initialized = False
 _current_song: str | None = None
+_loaded_path: str | None = None  # last path passed to pygame.mixer.music.load()
 _paused = False
 _fade_timer: threading.Timer | None = None
 
@@ -80,7 +82,7 @@ def _schedule_fadeout_locked() -> None:
 
 def play(filepath: str) -> None:
     """Stop whatever is playing and start playing filepath from the beginning."""
-    global _current_song, _paused
+    global _current_song, _loaded_path, _paused
     with _lock:
         _ensure_init()
         try:
@@ -88,6 +90,7 @@ def play(filepath: str) -> None:
             pygame.mixer.music.load(filepath)
             pygame.mixer.music.play()
             _current_song = filepath
+            _loaded_path = filepath
             _paused = False
             logger.info("Playing %s", filepath)
             _schedule_fadeout_locked()
@@ -102,6 +105,31 @@ def stop() -> None:
         if _initialized:
             pygame.mixer.music.stop()
         _current_song = None
+        _paused = False
+
+
+def release(filepath: str) -> None:
+    """Fully unload filepath from the mixer if it's the currently loaded track.
+
+    Needed before deleting a song file: on Windows, pygame/SDL keeps the file
+    handle open (even after stop()) until a new track is loaded or unload()
+    is called, which would otherwise make deletion fail with a PermissionError.
+    """
+    global _current_song, _loaded_path, _paused
+    with _lock:
+        if not _initialized or _loaded_path is None:
+            return
+        if Path(_loaded_path).resolve() != Path(filepath).resolve():
+            return
+        _cancel_fade_timer_locked()
+        pygame.mixer.music.stop()
+        try:
+            pygame.mixer.music.unload()
+        except AttributeError:
+            # Older pygame without unload(); nothing more we can do.
+            pass
+        _current_song = None
+        _loaded_path = None
         _paused = False
 
 

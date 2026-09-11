@@ -303,9 +303,10 @@ def delete_song_route():
     filename = request.form.get("filename", "")
     if filename not in storage.list_songs():
         abort(404)
+    # Release any file handle pygame is holding on this song (even if it already
+    # finished playing) so the delete below doesn't fail with a PermissionError.
+    player.release(str(SONGS_DIR / filename))
     storage.delete_song(filename)
-    if player.current_song() and Path(player.current_song()).name == filename:
-        player.stop()
     flash(f"Deleted {filename}.", "success")
     log_event(f"Deleted \"{filename}\"")
     return redirect(url_for("index"))

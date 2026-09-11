@@ -10,41 +10,19 @@
     <span class="hero-label">Now playing</span>
     <p class="hero-title" id="now-playing-text">{{ now_playing or "Nothing is playing" }}</p>
   </div>
-  <form method="post" action="{{ url_for('toggle_playback') }}">
+  <form method="post" action="{{ url_for('toggle_playback') }}" id="pause-form">
     {{ csrf_form.hidden_tag() }}
     <button type="submit" id="pause-btn" class="btn btn-stop" {% if not now_playing %}disabled{% endif %}>
-      {% if is_paused %}▶ Resume{% else %}⏸ Pause{% endif %}
+      {% if is_paused %}▶{% else %}⏸{% endif %}
     </button>
   </form>
 </section>
 
 {% if not hardware_available %}
 <div class="notice">NFC reader hardware not detected — expected when not running on the Pi.</div>
-<section class="card">
-  <h2>Simulate a scan <span class="badge">dev only</span></h2>
-  <p class="muted">No reader attached — type a fake tag UID and simulate scanning it to test playback/assignment.</p>
-  <div class="row">
-    <input type="text" id="sim-uid" placeholder="e.g. test-tag-1">
-    <button type="button" id="sim-btn" class="btn btn-secondary">Simulate scan</button>
-  </div>
-  <span id="sim-status" class="muted"></span>
-</section>
 {% endif %}
 
 <div class="card-grid">
-  <section class="card">
-    <h2>Speaker output</h2>
-    <p class="muted">Choose where audio is routed on the Pi.</p>
-    <form method="post" action="{{ url_for('audio_output') }}">
-      {{ audio_output_form.hidden_tag() }}
-      <div class="field">
-        {{ audio_output_form.output.label }}
-        {{ audio_output_form.output() }}
-      </div>
-      {{ audio_output_form.submit(class="btn btn-primary") }}
-    </form>
-  </section>
-
   <section class="card">
     <h2>Allowed playback hours</h2>
     <p class="muted">Tags only trigger playback between these times each day.</p>
@@ -61,25 +39,6 @@
         </div>
       </div>
       {{ settings_form.submit(class="btn btn-primary") }}
-    </form>
-  </section>
-
-  <section class="card">
-    <h2>Fade-out</h2>
-    <p class="muted">Automatically fade the song out after this many seconds (0 = play in full).</p>
-    <form method="post" action="{{ url_for('fade_settings') }}">
-      {{ fade_form.hidden_tag() }}
-      <div class="row">
-        <div class="field">
-          {{ fade_form.play_duration.label }}
-          {{ fade_form.play_duration() }}
-        </div>
-        <div class="field">
-          {{ fade_form.fade_seconds.label }}
-          {{ fade_form.fade_seconds() }}
-        </div>
-      </div>
-      {{ fade_form.submit(class="btn btn-primary") }}
     </form>
   </section>
 
@@ -119,53 +78,110 @@
   </section>
 </div>
 
-<section class="card">
-  <h2>Songs <span class="count">{{ songs|length }}</span></h2>
-  <table>
-    <thead><tr><th>File</th><th></th></tr></thead>
-    <tbody>
-      {% for song in songs %}
-      <tr>
-        <td>{{ song }}</td>
-        <td class="col-actions">
-          <form method="post" action="{{ url_for('delete_song_route') }}" onsubmit="return confirm('Delete {{ song }}?');">
-            {{ csrf_form.hidden_tag() }}
-            <input type="hidden" name="filename" value="{{ song }}">
-            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="2" class="muted">No songs uploaded yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+<details class="advanced">
+  <summary>Advanced settings</summary>
+  <div class="advanced-body">
 
-<section class="card">
-  <h2>Assigned tags <span class="count">{{ tags|length }}</span></h2>
-  <table>
-    <thead><tr><th>UID</th><th>Label</th><th>Song</th><th></th></tr></thead>
-    <tbody>
-      {% for uid, entry in tags.items() %}
-      <tr>
-        <td><code>{{ uid }}</code></td>
-        <td>{{ entry.label }}</td>
-        <td>{{ entry.song }}</td>
-        <td class="col-actions">
-          <form method="post" action="{{ url_for('unassign') }}" onsubmit="return confirm('Unassign this tag?');">
-            {{ csrf_form.hidden_tag() }}
-            <input type="hidden" name="uid" value="{{ uid }}">
-            <button type="submit" class="btn btn-danger btn-sm">Unassign</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4" class="muted">No tags assigned yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+    {% if not hardware_available %}
+    <section class="card">
+      <h2>Simulate a scan <span class="badge">dev only</span></h2>
+      <p class="muted">No reader attached — type a fake tag UID and simulate scanning it to test playback/assignment.</p>
+      <div class="row">
+        <input type="text" id="sim-uid" placeholder="e.g. test-tag-1">
+        <button type="button" id="sim-btn" class="btn btn-secondary">Simulate scan</button>
+      </div>
+      <span id="sim-status" class="muted"></span>
+    </section>
+    {% endif %}
+
+    <div class="card-grid">
+      <section class="card">
+        <h2>Speaker output</h2>
+        <p class="muted">Choose where audio is routed on the Pi.</p>
+        <form method="post" action="{{ url_for('audio_output') }}">
+          {{ audio_output_form.hidden_tag() }}
+          <div class="field">
+            {{ audio_output_form.output.label }}
+            {{ audio_output_form.output() }}
+          </div>
+          {{ audio_output_form.submit(class="btn btn-primary") }}
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Fade-out</h2>
+        <p class="muted">Automatically fade the song out after this many seconds (0 = play in full).</p>
+        <form method="post" action="{{ url_for('fade_settings') }}">
+          {{ fade_form.hidden_tag() }}
+          <div class="row">
+            <div class="field">
+              {{ fade_form.play_duration.label }}
+              {{ fade_form.play_duration() }}
+            </div>
+            <div class="field">
+              {{ fade_form.fade_seconds.label }}
+              {{ fade_form.fade_seconds() }}
+            </div>
+          </div>
+          {{ fade_form.submit(class="btn btn-primary") }}
+        </form>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Songs <span class="count">{{ songs|length }}</span></h2>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>File</th><th></th></tr></thead>
+        <tbody>
+          {% for song in songs %}
+          <tr>
+            <td>{{ song }}</td>
+            <td class="col-actions">
+              <form method="post" action="{{ url_for('delete_song_route') }}" data-confirm="Delete {{ song }}?">
+                {{ csrf_form.hidden_tag() }}
+                <input type="hidden" name="filename" value="{{ song }}">
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="muted">No songs uploaded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Assigned tags <span class="count">{{ tags|length }}</span></h2>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>UID</th><th>Label</th><th>Song</th><th></th></tr></thead>
+        <tbody>
+          {% for uid, entry in tags.items() %}
+          <tr>
+            <td><code>{{ uid }}</code></td>
+            <td>{{ entry.label }}</td>
+            <td>{{ entry.song }}</td>
+            <td class="col-actions">
+              <form method="post" action="{{ url_for('unassign') }}" data-confirm="Unassign this tag?">
+                {{ csrf_form.hidden_tag() }}
+                <input type="hidden" name="uid" value="{{ uid }}">
+                <button type="submit" class="btn btn-danger btn-sm">Unassign</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No tags assigned yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+  </div>
+</details>
 
 <script>
 const listenBtn = document.getElementById("listen-btn");
@@ -215,6 +231,7 @@ if (simBtn) {
 
 const nowPlayingText = document.getElementById("now-playing-text");
 const pauseBtn = document.getElementById("pause-btn");
+const pauseForm = document.getElementById("pause-form");
 const hero = document.getElementById("hero");
 
 async function refreshNowPlaying() {
@@ -222,9 +239,21 @@ async function refreshNowPlaying() {
   const data = await res.json();
   nowPlayingText.textContent = data.now_playing || "Nothing is playing";
   pauseBtn.disabled = !data.now_playing;
-  pauseBtn.textContent = data.paused ? "▶ Resume" : "⏸ Pause";
+  pauseBtn.textContent = data.paused ? "▶" : "⏸";
   hero.classList.toggle("hero-active", !!data.now_playing && !data.paused);
 }
+
+// Submit via fetch instead of a normal form post so the page doesn't reload
+// (and lose scroll position) every time playback is paused/resumed.
+pauseForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  // The server validates csrf_token from the POST body, not headers.
+  await fetch(pauseForm.action, {
+    method: "POST",
+    body: new URLSearchParams({ csrf_token: csrfToken }),
+  });
+  refreshNowPlaying();
+});
 
 refreshNowPlaying();
 setInterval(refreshNowPlaying, 1500);

@@ -49,6 +49,16 @@
   </main>
   {% endif %}
 
+  <div class="modal-backdrop" id="confirm-backdrop" hidden>
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-message">
+      <p id="confirm-message" class="modal-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Auto-dismiss flash toasts.
     document.querySelectorAll(".toast").forEach((el, i) => {
@@ -73,6 +83,45 @@
     refreshActivity();
     setInterval(refreshActivity, 2000);
     {% endif %}
+
+    // In-UI replacement for window.confirm(): any <form data-confirm="...">
+    // is intercepted and only submitted once the user confirms in the modal.
+    (function () {
+      const backdrop = document.getElementById("confirm-backdrop");
+      const messageEl = document.getElementById("confirm-message");
+      const okBtn = document.getElementById("confirm-ok");
+      const cancelBtn = document.getElementById("confirm-cancel");
+      let pendingForm = null;
+
+      function closeModal() {
+        backdrop.hidden = true;
+        pendingForm = null;
+      }
+
+      document.addEventListener("submit", (event) => {
+        const form = event.target;
+        if (form instanceof HTMLFormElement && form.dataset.confirm) {
+          event.preventDefault();
+          pendingForm = form;
+          messageEl.textContent = form.dataset.confirm;
+          backdrop.hidden = false;
+          okBtn.focus();
+        }
+      });
+
+      okBtn.addEventListener("click", () => {
+        const form = pendingForm;
+        closeModal();
+        if (form) form.submit();
+      });
+      cancelBtn.addEventListener("click", closeModal);
+      backdrop.addEventListener("click", (event) => {
+        if (event.target === backdrop) closeModal();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !backdrop.hidden) closeModal();
+      });
+    })();
   </script>
 </body>
 </html>
