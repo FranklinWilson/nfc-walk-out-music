@@ -1,0 +1,12 @@
+Flask>=3.0
+Flask-Login>=0.6
+Flask-WTF>=1.2
+Werkzeug>=3.0
+pygame-ce>=2.5
+pyOpenSSL>=24.0
+python-dotenv>=1.0
+
+# NFC reader hardware support: only installable/usable on the Raspberry Pi (Linux + SPI).
+# Skipped automatically on Windows/Mac dev machines; the app falls back to a stub reader.
+mfrc522>=0.0.7; sys_platform == "linux"
+RPi.GPIO>=0.7.1; sys_platform == "linux"

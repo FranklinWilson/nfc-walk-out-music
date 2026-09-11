@@ -32,6 +32,11 @@ MANIFEST
 *.manifest
 *.spec
 
+# Project-specific: local app data, secrets, uploaded songs, TLS certs
+instance/
+.env
+*.pem
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

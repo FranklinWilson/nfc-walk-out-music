@@ -1,0 +1,18 @@
+[Unit]
+Description=NFC Walk-out Music web app + tag reader
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/nfc-walk-out-music
+ExecStart=/home/pi/nfc-walk-out-music/venv/bin/python app.py
+Restart=on-failure
+RestartSec=5
+# Allow ALSA / audio device access and GPIO/SPI access for the 'pi' user
+# (add the user to the 'audio', 'gpio' and 'spi' groups instead of running as root).
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

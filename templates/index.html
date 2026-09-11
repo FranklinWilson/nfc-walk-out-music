@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+{% if not hardware_available %}
+<p class="flash-error">NFC reader hardware not detected (expected when not running on the Pi).</p>
+<section class="card">
+  <h2>Simulate a scan (dev only)</h2>
+  <p>No reader attached — type a fake tag UID and simulate scanning it to test playback/assignment.</p>
+  <input type="text" id="sim-uid" placeholder="e.g. test-tag-1" size="24">
+  <button type="button" id="sim-btn">Simulate scan</button>
+  <span id="sim-status"></span>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Now playing</h2>
+  <p id="now-playing-text">{{ now_playing or "Nothing is playing." }}</p>
+  <form method="post" action="{{ url_for('stop') }}">
+    {{ csrf_form.hidden_tag() }}
+    <button type="submit" id="stop-btn" {% if not now_playing %}disabled{% endif %}>Stop playback</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Speaker output</h2>
+  <p>Choose where audio is routed on the Pi (use "Aux / headphone jack" for a wired speaker).</p>
+  <form method="post" action="{{ url_for('audio_output') }}">
+    {{ audio_output_form.hidden_tag() }}
+    <div class="field">
+      {{ audio_output_form.output.label }}
+      {{ audio_output_form.output() }}
+    </div>
+    {{ audio_output_form.submit() }}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Allowed playback hours</h2>
+  <p>Tags will only trigger playback between these times each day.</p>
+  <form method="post" action="{{ url_for('settings') }}">
+    {{ settings_form.hidden_tag() }}
+    <div class="field">
+      {{ settings_form.start_time.label }}
+      {{ settings_form.start_time() }}
+    </div>
+    <div class="field">
+      {{ settings_form.end_time.label }}
+      {{ settings_form.end_time() }}
+    </div>
+    {{ settings_form.submit() }}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Upload a song</h2>
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+    {{ upload_form.hidden_tag() }}
+    {{ upload_form.mp3() }}
+    {{ upload_form.submit() }}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Songs</h2>
+  <table>
+    <thead><tr><th>File</th><th></th></tr></thead>
+    <tbody>
+      {% for song in songs %}
+      <tr>
+        <td>{{ song }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_song_route') }}" onsubmit="return confirm('Delete {{ song }}?');">
+            {{ csrf_form.hidden_tag() }}
+            <input type="hidden" name="filename" value="{{ song }}">
+            <button type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2">No songs uploaded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Assign a tag</h2>
+  <p>
+    <button type="button" id="listen-btn">Listen for tag scan</button>
+    <span id="listen-status"></span>
+  </p>
+  <form method="post" action="{{ url_for('assign') }}">
+    {{ assign_form.hidden_tag() }}
+    <div class="field">
+      {{ assign_form.uid.label }}
+      {{ assign_form.uid(id="uid-field", size=24) }}
+    </div>
+    <div class="field">
+      {{ assign_form.label.label }}
+      {{ assign_form.label(size=24) }}
+    </div>
+    <div class="field">
+      {{ assign_form.song.label }}
+      {{ assign_form.song() }}
+    </div>
+    {{ assign_form.submit() }}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Assigned tags</h2>
+  <table>
+    <thead><tr><th>UID</th><th>Label</th><th>Song</th><th></th></tr></thead>
+    <tbody>
+      {% for uid, entry in tags.items() %}
+      <tr>
+        <td>{{ uid }}</td>
+        <td>{{ entry.label }}</td>
+        <td>{{ entry.song }}</td>
+        <td>
+          <form method="post" action="{{ url_for('unassign') }}" onsubmit="return confirm('Unassign this tag?');">
+            {{ csrf_form.hidden_tag() }}
+            <input type="hidden" name="uid" value="{{ uid }}">
+            <button type="submit">Unassign</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No tags assigned yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+const listenBtn = document.getElementById("listen-btn");
+const listenStatus = document.getElementById("listen-status");
+const uidField = document.getElementById("uid-field");
+let pollTimer = null;
+const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+function stopListening() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  fetch("{{ url_for('capture_stop') }}", { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+  listenBtn.textContent = "Listen for tag scan";
+  listenStatus.textContent = "";
+}
+
+listenBtn.addEventListener("click", () => {
+  if (pollTimer) { stopListening(); return; }
+  fetch("{{ url_for('capture_start') }}", { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+  listenBtn.textContent = "Stop listening";
+  listenStatus.textContent = "Waiting for a tag to be scanned...";
+  pollTimer = setInterval(async () => {
+    const res = await fetch("{{ url_for('capture_status') }}");
+    const data = await res.json();
+    if (data.uid) {
+      uidField.value = data.uid;
+      listenStatus.textContent = "Captured tag: " + data.uid;
+      stopListening();
+    }
+  }, 1000);
+});
+
+const simBtn = document.getElementById("sim-btn");
+if (simBtn) {
+  simBtn.addEventListener("click", async () => {
+    const uid = document.getElementById("sim-uid").value.trim();
+    const status = document.getElementById("sim-status");
+    if (!uid) { status.textContent = "Enter a UID first."; return; }
+    await fetch("{{ url_for('simulate_scan') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+      body: JSON.stringify({ uid }),
+    });
+    status.textContent = "Simulated scan of " + uid;
+    refreshNowPlaying();
+  });
+}
+
+const nowPlayingText = document.getElementById("now-playing-text");
+const stopBtn = document.getElementById("stop-btn");
+
+async function refreshNowPlaying() {
+  const res = await fetch("{{ url_for('status') }}");
+  const data = await res.json();
+  nowPlayingText.textContent = data.now_playing || "Nothing is playing.";
+  stopBtn.disabled = !data.now_playing;
+}
+
+refreshNowPlaying();
+setInterval(refreshNowPlaying, 1500);
+</script>
+{% endblock %}
