@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Log in{% endblock %}
 {% block content %}
-<form method="post" class="card">
-  {{ form.hidden_tag() }}
-  <div class="field">
-    {{ form.username.label }}
-    {{ form.username(size=32, autofocus=true) }}
-  </div>
-  <div class="field">
-    {{ form.password.label }}
-    {{ form.password(size=32) }}
-  </div>
-  {{ form.submit() }}
-</form>
+<div class="login-wrap">
+  <form method="post" class="card login-card">
+    <div class="brand-icon login-icon">🎵</div>
+    <h2>Sign in</h2>
+    {{ form.hidden_tag() }}
+    <div class="field">
+      {{ form.username.label }}
+      {{ form.username(autofocus=true) }}
+    </div>
+    <div class="field">
+      {{ form.password.label }}
+      {{ form.password() }}
+    </div>
+    {{ form.submit(class="btn btn-primary btn-block") }}
+  </form>
+</div>
 {% endblock %}
+

@@ -20,6 +20,8 @@ DEFAULT_PLAYBACK_START = "08:00"
 DEFAULT_PLAYBACK_END = "22:00"
 DEFAULT_AUDIO_OUTPUT = "headphones"  # Pi's 3.5mm aux jack
 AUDIO_OUTPUTS = ("auto", "headphones", "hdmi")
+DEFAULT_PLAY_DURATION_SECONDS = 0  # 0 = play the full song, no auto fade-out
+DEFAULT_FADE_SECONDS = 5
 
 _DEFAULT_DATA = {
     "admin_password_hash": None,
@@ -28,6 +30,8 @@ _DEFAULT_DATA = {
     "playback_start": DEFAULT_PLAYBACK_START,
     "playback_end": DEFAULT_PLAYBACK_END,
     "audio_output": DEFAULT_AUDIO_OUTPUT,
+    "play_duration_seconds": DEFAULT_PLAY_DURATION_SECONDS,
+    "fade_seconds": DEFAULT_FADE_SECONDS,
 }
 
 
@@ -41,6 +45,8 @@ def _read() -> dict:
     data.setdefault("playback_start", DEFAULT_PLAYBACK_START)
     data.setdefault("playback_end", DEFAULT_PLAYBACK_END)
     data.setdefault("audio_output", DEFAULT_AUDIO_OUTPUT)
+    data.setdefault("play_duration_seconds", DEFAULT_PLAY_DURATION_SECONDS)
+    data.setdefault("fade_seconds", DEFAULT_FADE_SECONDS)
     return data
 
 
@@ -111,6 +117,24 @@ def set_audio_output(output: str) -> None:
     with _lock:
         data = _read()
         data["audio_output"] = output
+        _write(data)
+
+
+def get_fade_settings() -> tuple[int, int]:
+    """Returns (play_duration_seconds, fade_seconds). A play_duration of 0
+    means the song plays in full with no auto fade-out."""
+    with _lock:
+        data = _read()
+        return data["play_duration_seconds"], data["fade_seconds"]
+
+
+def set_fade_settings(play_duration_seconds: int, fade_seconds: int) -> None:
+    if play_duration_seconds < 0 or fade_seconds < 0:
+        raise ValueError("Durations must be zero or positive")
+    with _lock:
+        data = _read()
+        data["play_duration_seconds"] = play_duration_seconds
+        data["fade_seconds"] = fade_seconds
         _write(data)
 
 

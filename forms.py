@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField, FileRequired
-from wtforms import PasswordField, SelectField, StringField, SubmitField, TimeField
-from wtforms.validators import DataRequired, Length
+from wtforms import IntegerField, PasswordField, SelectField, StringField, SubmitField, TimeField
+from wtforms.validators import DataRequired, Length, NumberRange
 
 
 class LoginForm(FlaskForm):
@@ -42,6 +42,14 @@ class AudioOutputForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField("Save output")
+
+
+class FadeSettingsForm(FlaskForm):
+    play_duration = IntegerField(
+        "Play for (seconds, 0 = full song)", validators=[NumberRange(min=0, max=3600)]
+    )
+    fade_seconds = IntegerField("Fade-out duration (seconds)", validators=[NumberRange(min=0, max=60)])
+    submit = SubmitField("Save fade-out")
 
 
 class CsrfOnlyForm(FlaskForm):

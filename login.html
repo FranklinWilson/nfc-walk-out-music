@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🎵</span>
+      <h1>NFC Walk-out Music</h1>
+    </div>
+    
+  </header>
+
+  
+    
+  
+
+  
+  <main class="main-col main-col-solo">
+    
+<div class="login-wrap">
+  <form method="post" class="card login-card">
+    <div class="brand-icon login-icon">🎵</div>
+    <h2>Sign in</h2>
+    <input id="csrf_token" name="csrf_token" type="hidden" value="IjJiNjE3NWY3NzkyNGEzNjg2YzgyMGJmMGJhOTMwMDQ1NTIyZTA1M2Ii.aqQ3iw.IQ2ac__KFqWFXF2XDz89w7x9ZSw">
+    <div class="field">
+      <label for="username">Username</label>
+      <input autofocus id="username" name="username" required type="text" value="">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" required type="password" value="">
+    </div>
+    <input class="btn btn-primary btn-block" id="submit" name="submit" type="submit" value="Log in">
+  </form>
+</div>
+
+  </main>
+  
+
+  <script>
+    // Auto-dismiss flash toasts.
+    document.querySelectorAll(".toast").forEach((el, i) => {
+      setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, 4000 + i * 200);
+    });
+
+    
+  </script>
+</body>
+</html>

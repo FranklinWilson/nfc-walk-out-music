@@ -11,7 +11,8 @@ import os
 import threading
 import time
 import uuid
-from datetime import time as dt_time
+from collections import deque
+from datetime import datetime, time as dt_time
 from pathlib import Path
 
 import click
@@ -30,7 +31,7 @@ from werkzeug.utils import secure_filename
 import player
 import storage
 from config import Config, SONGS_DIR
-from forms import AssignForm, AudioOutputForm, CsrfOnlyForm, LoginForm, PlaybackWindowForm, UploadForm
+from forms import AssignForm, AudioOutputForm, CsrfOnlyForm, FadeSettingsForm, LoginForm, PlaybackWindowForm, UploadForm
 from nfc_reader import NfcReader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -88,24 +89,40 @@ class ScanCapture:
 
 scan_capture = ScanCapture()
 
+# Small in-memory activity feed shown in the dashboard sidebar (not persisted).
+_activity_log: deque[dict] = deque(maxlen=50)
+_activity_lock = threading.Lock()
+
+
+def log_event(message: str, level: str = "info") -> None:
+    with _activity_lock:
+        _activity_log.appendleft(
+            {"time": datetime.now().strftime("%H:%M:%S"), "message": message, "level": level}
+        )
+
 
 def handle_scan(uid: str) -> None:
     if scan_capture.offer(uid):
         logger.info("Captured tag %s for assignment", uid)
+        log_event(f"Tag {uid} captured for assignment")
         return
     song = storage.get_song_for_tag(uid)
     if not song:
         logger.info("Unknown tag scanned: %s", uid)
+        log_event(f"Unknown tag scanned: {uid}", "warning")
         return
     if not storage.is_within_playback_window():
         start, end = storage.get_playback_window()
         logger.info("Tag %s scanned outside allowed hours (%s-%s); ignoring", uid, start, end)
+        log_event(f"Tag {uid} ignored (outside {start}-{end} playback hours)", "warning")
         return
     song_path = SONGS_DIR / song
     if song_path.exists():
         player.play(str(song_path))
+        log_event(f"Playing \"{song}\" (tag {uid})")
     else:
         logger.warning("Assigned song %s for tag %s is missing on disk", song, uid)
+        log_event(f"Song {song} missing on disk (tag {uid})", "error")
 
 
 nfc_reader = NfcReader(on_scan=handle_scan)
@@ -157,6 +174,8 @@ def index():
         end_time=dt_time.fromisoformat(playback_end),
     )
     audio_output_form = AudioOutputForm(output=storage.get_audio_output())
+    play_duration, fade_seconds = storage.get_fade_settings()
+    fade_form = FadeSettingsForm(play_duration=play_duration, fade_seconds=fade_seconds)
     return render_template(
         "index.html",
         songs=storage.list_songs(),
@@ -166,7 +185,9 @@ def index():
         csrf_form=csrf_form,
         settings_form=settings_form,
         audio_output_form=audio_output_form,
+        fade_form=fade_form,
         now_playing=(Path(player.current_song()).name if player.current_song() else None),
+        is_paused=player.is_paused(),
         hardware_available=nfc_reader.hardware_available,
     )
 
@@ -184,6 +205,7 @@ def settings():
         form.start_time.data.strftime("%H:%M"), form.end_time.data.strftime("%H:%M")
     )
     flash("Allowed playback hours updated.", "success")
+    log_event(f"Playback hours updated to {form.start_time.data.strftime('%H:%M')}-{form.end_time.data.strftime('%H:%M')}")
     return redirect(url_for("index"))
 
 
@@ -199,6 +221,25 @@ def audio_output():
     storage.set_audio_output(form.output.data)
     player.set_output_device(form.output.data)
     flash("Speaker output updated.", "success")
+    log_event(f"Speaker output set to {form.output.data}")
+    return redirect(url_for("index"))
+
+
+@app.route("/fade_settings", methods=["POST"])
+@login_required
+def fade_settings():
+    form = FadeSettingsForm()
+    if not form.validate_on_submit():
+        for field_errors in form.errors.values():
+            for err in field_errors:
+                flash(err, "error")
+        return redirect(url_for("index"))
+    storage.set_fade_settings(form.play_duration.data, form.fade_seconds.data)
+    if form.play_duration.data:
+        flash(f"Songs will fade out after {form.play_duration.data}s.", "success")
+    else:
+        flash("Songs will now play in full.", "success")
+    log_event(f"Fade-out settings updated: play {form.play_duration.data}s, fade {form.fade_seconds.data}s")
     return redirect(url_for("index"))
 
 
@@ -226,6 +267,7 @@ def upload():
 
     f.save(dest_path)
     flash(f"Uploaded {filename}.", "success")
+    log_event(f"Uploaded \"{filename}\"")
     return redirect(url_for("index"))
 
 
@@ -237,6 +279,18 @@ def stop():
         abort(400)
     player.stop()
     flash("Playback stopped.", "success")
+    log_event("Playback stopped manually")
+    return redirect(url_for("index"))
+
+
+@app.route("/toggle_playback", methods=["POST"])
+@login_required
+def toggle_playback():
+    form = CsrfOnlyForm()
+    if not form.validate_on_submit():
+        abort(400)
+    paused = player.toggle_pause()
+    log_event("Playback paused" if paused else "Playback resumed")
     return redirect(url_for("index"))
 
 
@@ -253,6 +307,7 @@ def delete_song_route():
     if player.current_song() and Path(player.current_song()).name == filename:
         player.stop()
     flash(f"Deleted {filename}.", "success")
+    log_event(f"Deleted \"{filename}\"")
     return redirect(url_for("index"))
 
 
@@ -268,6 +323,7 @@ def assign():
         return redirect(url_for("index"))
     storage.assign_tag(form.uid.data.strip(), form.song.data, form.label.data.strip())
     flash("Tag assigned.", "success")
+    log_event(f"Tag {form.uid.data.strip()} assigned to \"{form.song.data}\"")
     return redirect(url_for("index"))
 
 
@@ -280,6 +336,7 @@ def unassign():
     uid = request.form.get("uid", "")
     storage.unassign_tag(uid)
     flash("Tag unassigned.", "success")
+    log_event(f"Tag {uid} unassigned")
     return redirect(url_for("index"))
 
 
@@ -322,7 +379,19 @@ def simulate_scan():
 @login_required
 def status():
     song = player.current_song()
-    return jsonify({"now_playing": Path(song).name if song else None})
+    return jsonify(
+        {
+            "now_playing": Path(song).name if song else None,
+            "paused": player.is_paused(),
+        }
+    )
+
+
+@app.route("/api/events")
+@login_required
+def events():
+    with _activity_lock:
+        return jsonify({"events": list(_activity_log)})
 
 
 @app.cli.command("init-admin")

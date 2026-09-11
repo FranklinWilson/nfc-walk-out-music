@@ -4,26 +4,76 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}NFC Walk-out Music{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header>
-    <h1>NFC Walk-out Music</h1>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🎵</span>
+      <h1>NFC Walk-out Music</h1>
+    </div>
     {% if current_user.is_authenticated %}
-      <nav><a href="{{ url_for('logout') }}">Log out</a></nav>
+      <nav><a class="btn btn-ghost" href="{{ url_for('logout') }}">Log out</a></nav>
     {% endif %}
   </header>
-  <main>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul class="flashes">
-          {% for category, message in messages %}
-            <li class="flash-{{ category }}">{{ message }}</li>
-          {% endfor %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="toasts" id="toasts">
+        {% for category, message in messages %}
+          <div class="toast toast-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if current_user.is_authenticated %}
+  <div class="layout">
+    <main class="main-col">
+      {% block content %}{% endblock %}
+    </main>
+    <aside class="sidebar">
+      <div class="card activity-card">
+        <h2>Activity log</h2>
+        <ul id="activity-list" class="activity-list">
+          <li class="activity-empty">No activity yet.</li>
         </ul>
-      {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
+      </div>
+    </aside>
+  </div>
+  {% else %}
+  <main class="main-col main-col-solo">
+    {{ self.content() }}
   </main>
+  {% endif %}
+
+  <script>
+    // Auto-dismiss flash toasts.
+    document.querySelectorAll(".toast").forEach((el, i) => {
+      setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, 4000 + i * 200);
+    });
+
+    {% if current_user.is_authenticated %}
+    async function refreshActivity() {
+      try {
+        const res = await fetch("{{ url_for('events') }}");
+        const data = await res.json();
+        const list = document.getElementById("activity-list");
+        if (!data.events || data.events.length === 0) {
+          list.innerHTML = '<li class="activity-empty">No activity yet.</li>';
+          return;
+        }
+        list.innerHTML = data.events.map(e =>
+          `<li class="activity-item activity-${e.level}"><span class="activity-time">${e.time}</span><span class="activity-msg">${e.message}</span></li>`
+        ).join("");
+      } catch (e) { /* ignore transient network errors */ }
+    }
+    refreshActivity();
+    setInterval(refreshActivity, 2000);
+    {% endif %}
+  </script>
 </body>
 </html>
+
